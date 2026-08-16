@@ -112,6 +112,17 @@ IMAGE_RE = re.compile(
     r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"([^\"]*)\")?\)"
 )
 LINK_RE = re.compile(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)(?:\s+\"([^\"]*)\")?\)")
+IMAGE_MIME_TYPES = {
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".ico": "image/x-icon",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+}
 
 
 def _safe_path(path: str, run_dir: Path) -> Path | None:
@@ -140,7 +151,10 @@ def _embedded_image(path: str, run_dir: Path, issues: list[str]) -> str:
     if asset is None or not asset.is_file():
         issues.append(f"missing or unsafe image asset: {path}")
         return ""
-    mime = mimetypes.guess_type(asset.name)[0] or "application/octet-stream"
+    mime = mimetypes.guess_type(asset.name)[0] or IMAGE_MIME_TYPES.get(asset.suffix.lower())
+    if not mime or not mime.startswith("image/"):
+        issues.append(f"unsupported image type: {path}")
+        return ""
     encoded = base64.b64encode(asset.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{encoded}"
 
