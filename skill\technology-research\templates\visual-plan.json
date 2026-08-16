@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "figure_id": "FIG-01",
+      "role": "mechanism",
+      "kind": "schematic",
+      "purpose": "Explain the causal chain, observables, cross-sensitivities, and system boundary.",
+      "status": "planned",
+      "source_ids": []
+    },
+    {
+      "figure_id": "FIG-02",
+      "role": "quantitative_comparison",
+      "kind": "chart",
+      "purpose": "Compare verified quantitative results only after normalizing conditions and units.",
+      "status": "planned",
+      "source_ids": [],
+      "data_file": "data-points.csv"
+    },
+    {
+      "figure_id": "FIG-03",
+      "role": "route_or_maturity",
+      "kind": "route-map",
+      "purpose": "Show route differences, engineering constraints, evidence maturity, and decision boundaries.",
+      "status": "planned",
+      "source_ids": []
+    }
+  ]
+}

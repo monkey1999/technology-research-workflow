@@ -8,6 +8,8 @@
 - `REPORT.html`：单文件离线版，内嵌样式和本地图像，带目录、表格及可点击引用。
 - `REPORT.pdf`：环境存在 Pandoc 及可用 PDF 引擎时生成。
 - `sources.jsonl`、`claims.jsonl`、`validation/`：后台证据和质量账本，不进入读者正文。
+- `experiment-matrix.csv`：逐项保留对象、路线、条件、对照、指标、结果、不确定性、复现和限制，防止把不可比实验强行并列。
+- `data-points.csv`、`visual-plan.json`、`figures/figure-register.jsonl`：可追溯定量图表的数据、目的与来源登记。
 - `REPORT-package.zip`：报告和可复核材料的完整交付包。
 
 证据账本服务于报告，但不能取代报告。正文不得泄漏内部来源编号、检查清单或检索日志；结论必须说明成立条件和证据边界。
@@ -32,15 +34,16 @@ Windows `py` launcher。
 ./researchctl.ps1 verify --run runs/demo-topic --stage evidence
 ```
 
-正文完成后，必须由独立上下文使用 `technology-research-review` skill 审阅，并写出 `validation/report-review.json`。最后执行发布门禁和交付构建：
+正文和证据图表完成后先渲染；独立上下文必须审阅最终 Markdown 和实际 HTML，并把两者哈希写入 `validation/report-review.json`。最后执行发布门禁和交付构建：
 
 ```powershell
-./researchctl.ps1 verify --run runs/demo-topic --stage release
 ./researchctl.ps1 render --run runs/demo-topic
+## 独立审阅并修订后，如有修改必须重新 render 和 review
+./researchctl.ps1 verify --run runs/demo-topic --stage release
 ./researchctl.ps1 package --run runs/demo-topic
 ```
 
-只有发布门禁通过，且独立审阅给出 `ready` 或 `ready_with_limitations`，才能称为可交付。
+`quality_profile: doctoral` 默认要求至少 18,000 个正文非空白字符、20 个正文内证据链接、3 张证据图、3 张分析表、8 条实验矩阵记录、6 个作图数据点、15 篇全文学术来源和 10 篇全文原始研究。它们是防止低质量报告混过门槛的下限，不是“博士级”的充分证明。通过后状态仍是 `candidate_for_human_acceptance`，必须由人作最终接受判断。
 
 ## DeepSeek Harness
 
@@ -55,7 +58,7 @@ npx @deepseek-ai/dsh web
 
 ## HTML 离线交付
 
-`render` 会把本地 PNG、JPEG、GIF、WebP 和 SVG 转为 data URI，并把 Markdown 表格转换为标准 HTML 表格。因此可单独发送 `REPORT.html`。外部 HTTP 图片、缺失图片或越界路径会让渲染返回失败，避免生成表面完整、实际离线缺图的文件。
+`render` 会把本地 PNG、JPEG、GIF、WebP 和 SVG 转为 data URI，并把 Markdown 表格转换为标准 HTML 表格。因此可单独发送 `REPORT.html`。外部 HTTP 图片、缺失图片或越界路径会让渲染返回失败。博士级报告中的每张图还必须登记来源、数据、图注和生成方式。
 
 ## 当前边界
 

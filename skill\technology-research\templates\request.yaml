@@ -1,0 +1,39 @@
+topic: ""
+audience: "技术研发、产品和产业决策人员"
+language: "zh-CN"
+as_of: ""
+
+decisions:
+  - "读者需要据此做出的主要技术或工程决定"
+
+scope:
+  include: [academic, engineering, industry, standards, maturity]
+  exclude: [patents]
+
+report:
+  formats: [markdown, html, pdf]
+  primary_output: "REPORT.md"
+  style: "professional-readable"
+  narrative: "mechanism-evidence-boundary-judgment"
+  visuals: "evidence-driven"
+  quality_profile: "doctoral"
+
+quality:
+  require_primary_sources: true
+  require_counter_evidence: true
+  require_negative_evidence: true
+  require_independent_review: true
+  allow_ready_with_limitations: true
+  minimum_body_characters: 18000
+  minimum_body_citations: 20
+  minimum_figures: 3
+  minimum_tables: 3
+  minimum_experiment_rows: 8
+  minimum_data_points: 6
+  minimum_full_text_academic_sources: 15
+  minimum_primary_research_sources: 10
+  require_experiment_matrix: true
+  require_visual_plan: true
+  require_figure_register: true
+  require_rendered_review: true
+  final_human_acceptance_required: true

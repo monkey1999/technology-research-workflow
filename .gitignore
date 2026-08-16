@@ -9,4 +9,5 @@ __pycache__/
 dist/
 *.pdf
 *.html
-
+.dsh-vision-router/
+.research-cache/

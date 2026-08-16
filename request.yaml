@@ -1,12 +1,14 @@
-topic: "光纤传感技术在电芯监测中的应用"
+topic: "光纤布拉格光栅（Fiber Bragg Grating，FBG）在电芯监测中的应用"
 audience: "技术研发、产品和产业决策人员"
 language: "zh-CN"
 as_of: "2026-08-16"
 
 decisions:
-  - "判断该技术是否具有可复现实验基础和明确工程价值"
-  - "比较主要技术路线并识别各自适用场景、边界和成熟度"
-  - "为后续样机验证、合作或产品立项给出证据约束下的建议"
+  - "判断FBG监测电芯温度、应变、膨胀和内部压力的实验依据是否可复现"
+  - "比较表面粘贴、结构集成和电芯内部嵌入等部署路线的性能、风险与适用边界"
+  - "评估温度—应变交叉敏感、封装、解调、标定、长期漂移和安全性问题"
+  - "判断FBG相对于热电偶、电阻温度传感器、压力传感器及其他光纤方案的实际价值"
+  - "为样机验证、合作开发或产品立项提出证据约束下的下一步建议"
 
 scope:
   include:
@@ -27,6 +29,7 @@ report:
   style: "professional-readable"
   narrative: "mechanism-evidence-boundary-comparison-judgment"
   visuals: "evidence-bearing-only"
+  quality_profile: "doctoral"
 
 quality:
   require_primary_sources: true
@@ -34,3 +37,16 @@ quality:
   require_negative_evidence: true
   require_independent_review: true
   allow_ready_with_limitations: true
+  minimum_body_characters: 18000
+  minimum_body_citations: 20
+  minimum_figures: 3
+  minimum_tables: 3
+  minimum_experiment_rows: 8
+  minimum_data_points: 6
+  minimum_full_text_academic_sources: 15
+  minimum_primary_research_sources: 10
+  require_experiment_matrix: true
+  require_visual_plan: true
+  require_figure_register: true
+  require_rendered_review: true
+  final_human_acceptance_required: true
