@@ -1,0 +1,30 @@
+topic: ""
+audience: "技术研发、产品和产业决策人员"
+language: "zh-CN"
+as_of: ""
+
+scope:
+  include:
+    - academic
+    - engineering
+    - industry
+    - standards
+    - maturity
+  exclude:
+    - patents
+
+report:
+  formats:
+    - markdown
+    - html
+    - pdf
+  primary_output: "REPORT.md"
+  style: "professional-readable"
+
+quality:
+  require_primary_sources: true
+  require_counter_evidence: true
+  require_negative_evidence: true
+  allow_ready_with_limitations: true
+
+
