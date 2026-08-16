@@ -35,7 +35,15 @@ cd technology-research-workflow
 ./researchctl.ps1 package --run runs/demo-topic
 ```
 
+`render` 会生成可离线打开的单文件 `REPORT.html`：报告中的本地 PNG、JPEG、GIF、WebP
+和 SVG 会被嵌入 HTML，Markdown 表格会转换为标准 HTML 表格，样式也内嵌在文件中。
+因此可以直接把 `REPORT.html` 发给别人，不需要额外发送图片目录。若报告引用了缺失的本地
+图片或外部 HTTP 图片，渲染命令会报告问题并以失败状态结束，避免产生看似完整但无法离线阅读的报告。
+
+`package` 还会生成 `REPORT-package.zip`，其中包含 HTML、Markdown、证据文件和
+`package-manifest.json`，适合需要同时交付报告和可复核材料的场景。
+
 ## 当前边界
 
-本仓库提供工作流契约、模板、校验和渲染基础设施；具体网页搜索、论文 API、企业资料和模型调用由当前 Agent 或后续 source adapter 提供。
+本仓库提供工作流契约、模板、校验、离线 HTML 渲染和发布打包基础设施；具体网页搜索、论文 API、企业资料和模型调用由当前 Agent 或后续 source adapter 提供。
 
