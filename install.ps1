@@ -15,9 +15,9 @@ if ($Scope -eq 'Global') {
     )
 } else {
     $platformRoots = @(
-        (Join-Path (Get-Location) '.claude\skills'),
-        (Join-Path (Get-Location) '.opencode\skills'),
-        (Join-Path (Get-Location) '.agents\skills')
+        (Join-Path $root '.claude\skills'),
+        (Join-Path $root '.opencode\skills'),
+        (Join-Path $root '.agents\skills')
     )
 }
 

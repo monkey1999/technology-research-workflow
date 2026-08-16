@@ -22,6 +22,10 @@ cd technology-research-workflow
 ./researchctl.ps1 init --config request.yaml --slug demo-topic
 ```
 
+如果 Python 已安装但不在 `PATH`，可先把解释器绝对路径写入
+`TECH_RESEARCH_PYTHON` 环境变量；脚本也会依次识别 `python`、`python3` 和
+Windows `py` launcher。
+
 在目标 Agent 中要求其使用 `technology-research` skill 完成检索、综合和写作。证据准备完成后先运行后台门禁：
 
 ```powershell
