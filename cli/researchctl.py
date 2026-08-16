@@ -65,7 +65,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         "created_at": utc_now(),
         "run_dir": str(run_dir),
         "status": "initialized",
-        "workflow_version": "0.1.0",
+        "workflow_version": "0.2.0",
     }
     (run_dir / "run-manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -74,36 +74,317 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
-REQUIRED_HEADINGS = [
-    "摘要与关键判断",
-    "核心机制与概念边界",
-    "技术路线和关键差异",
-    "工程应用、产品化和部署条件",
-    "争议、负面证据和未解决问题",
-    "结论与行动建议",
+REQUIRED_SECTION_GROUPS = [
+    ("摘要", ("摘要与核心判断", "摘要与关键判断")),
+    ("机制", ("技术问题与作用机制", "核心机制与概念边界")),
+    ("路线", ("技术路线与关键差异", "技术路线和关键差异")),
+    ("证据与边界", ("实验证据、性能与适用边界", "实验结果与性能边界")),
+    ("工程与应用", ("工程化、产业格局与应用选择", "工程应用、产品化和部署条件")),
+    ("结论", ("结论与未来路线", "结论与行动建议")),
 ]
+ALLOWED_VERIFICATION_LEVELS = {
+    "metadata_verified",
+    "abstract_verified",
+    "full_text_verified",
+    "official_text_verified",
+    "secondary_only",
+    "unavailable",
+    "conflict",
+}
+SECONDARY_HOSTS = {
+    "eurekalert.org",
+    "go.gale.com",
+    "news.qq.com",
+    "ouci.dntb.gov.ua",
+    "scite.ai",
+    "semanticscholar.org",
+    "www.163.com",
+    "www.ebiaozhun.com",
+    "www.guifanku.com",
+}
+OFFICIAL_CLAIM_TYPES = {"regulatory_driver", "standards_status", "regulation", "standard"}
+STRONG_LANGUAGE = re.compile(r"(?:目前)?唯一|任何量产|完全不存在|量产前装为零|已经证明")
+INTERNAL_ID = re.compile(r"\b(?:S|E|C)-[A-Z0-9-]+\b")
+
+
+def _read_jsonl(path: Path, label: str, errors: list[str]) -> list[dict]:
+    if not path.is_file():
+        errors.append(f"missing artifact: {path.name}")
+        return []
+    records = []
+    for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not raw.strip():
+            continue
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            errors.append(f"{label} line {line_number}: invalid JSON ({exc.msg})")
+            continue
+        if not isinstance(value, dict):
+            errors.append(f"{label} line {line_number}: record must be an object")
+            continue
+        records.append(value)
+    return records
+
+
+def _yaml_list(text: str, key: str) -> set[str]:
+    lines = text.splitlines()
+    values: set[str] = set()
+    for index, raw in enumerate(lines):
+        match = re.match(rf"^(\s*){re.escape(key)}\s*:\s*(.*)$", raw)
+        if not match:
+            continue
+        indent = len(match.group(1))
+        inline = match.group(2).strip()
+        if inline.startswith("[") and inline.endswith("]"):
+            values.update(item.strip().strip("'\"").lower() for item in inline[1:-1].split(",") if item.strip())
+            continue
+        for following in lines[index + 1 :]:
+            if not following.strip():
+                continue
+            following_indent = len(following) - len(following.lstrip())
+            if following_indent <= indent:
+                break
+            item = re.match(r"^\s*-\s*(.+?)\s*$", following)
+            if item:
+                values.add(item.group(1).strip().strip("'\"").lower())
+    return values
+
+
+def _yaml_bool(text: str, key: str, default: bool = False) -> bool:
+    match = re.search(rf"^\s*{re.escape(key)}\s*:\s*(true|false)\s*$", text, re.MULTILINE | re.IGNORECASE)
+    return default if not match else match.group(1).lower() == "true"
+
+
+def _host(url: str) -> str:
+    return (urlsplit(url).hostname or "").lower()
+
+
+def _verify_sources(records: list[dict], exclusions: set[str], errors: list[str], warnings: list[str]) -> dict[str, dict]:
+    source_by_id: dict[str, dict] = {}
+    title_by_url: dict[str, str] = {}
+    patents_excluded = "patents" in exclusions or "patent" in exclusions
+    for index, source in enumerate(records, start=1):
+        prefix = f"source {index}"
+        source_id = str(source.get("source_id", "")).strip()
+        source_class = str(source.get("source_class", "")).strip().lower()
+        legacy_source_class = str(source.get("source_type", "")).strip().lower()
+        title = str(source.get("title", "")).strip()
+        url = str(source.get("canonical_url", "")).strip()
+        authority = str(source.get("authority", "")).strip().lower()
+        level = str(source.get("verification_level", "")).strip().lower()
+        if not source_id:
+            errors.append(f"{prefix}: missing source_id")
+        elif source_id in source_by_id:
+            errors.append(f"{prefix}: duplicate source_id {source_id}")
+        else:
+            source_by_id[source_id] = source
+        if not source_class:
+            errors.append(f"{prefix}: missing source_class (legacy source_type is not release-safe)")
+        if not title:
+            errors.append(f"{prefix}: missing title")
+        if not url:
+            errors.append(f"{prefix}: missing canonical_url")
+        if authority not in {"primary", "official", "secondary"}:
+            errors.append(f"{prefix}: authority must be primary, official, or secondary")
+        if level not in ALLOWED_VERIFICATION_LEVELS:
+            errors.append(f"{prefix}: invalid verification_level {level or '<missing>'}")
+        if authority == "primary" and _host(url) in SECONDARY_HOSTS:
+            errors.append(f"{prefix}: secondary or aggregator URL marked primary: {url}")
+        if level in {"full_text_verified", "official_text_verified"}:
+            if not str(source.get("locator", "")).strip():
+                errors.append(f"{prefix}: {level} requires locator")
+            if not str(source.get("extracted_evidence", "")).strip():
+                errors.append(f"{prefix}: {level} requires extracted_evidence")
+            if not str(source.get("content_hash", "")).strip():
+                errors.append(f"{prefix}: {level} requires content_hash")
+        if not str(source.get("accessed_at", "")).strip():
+            errors.append(f"{prefix}: missing accessed_at")
+        if patents_excluded and ("patent" in source_class or "patent" in legacy_source_class or "专利" in title.lower()):
+            errors.append(f"{prefix}: excluded patent material is present")
+        if url:
+            normalized_url = url.rstrip("/").lower()
+            normalized_title = re.sub(r"\W+", " ", title.lower()).strip()
+            previous = title_by_url.get(normalized_url)
+            if previous and previous != normalized_title:
+                errors.append(f"{prefix}: canonical URL is assigned to conflicting titles")
+            title_by_url[normalized_url] = normalized_title
+        if level in {"metadata_verified", "abstract_verified", "secondary_only"}:
+            warnings.append(f"{prefix}: evidence level is limited ({level})")
+    return source_by_id
+
+
+def _verify_claims(
+    records: list[dict],
+    source_by_id: dict[str, dict],
+    exclusions: set[str],
+    require_counter: bool,
+    errors: list[str],
+    warnings: list[str],
+) -> None:
+    claim_ids: set[str] = set()
+    patents_excluded = "patents" in exclusions or "patent" in exclusions
+    for index, claim in enumerate(records, start=1):
+        prefix = f"claim {index}"
+        claim_id = str(claim.get("claim_id", "")).strip()
+        text = str(claim.get("claim", "")).strip()
+        importance = str(claim.get("importance", "")).strip().lower()
+        support_type = str(claim.get("support_type", "")).strip().lower()
+        claim_type = str(claim.get("claim_type", "")).strip().lower()
+        evidence_ids = claim.get("evidence_ids", [])
+        counter_ids = claim.get("counter_evidence_ids", [])
+        counter_note = str(claim.get("counter_evidence_note", "")).strip()
+        if not claim_id:
+            errors.append(f"{prefix}: missing claim_id")
+        elif claim_id in claim_ids:
+            errors.append(f"{prefix}: duplicate claim_id {claim_id}")
+        claim_ids.add(claim_id)
+        if not text:
+            errors.append(f"{prefix}: missing claim text")
+        if importance not in {"decision_critical", "supporting"}:
+            errors.append(f"{prefix}: importance must be decision_critical or supporting")
+        if support_type not in {"direct", "indirect", "mixed"}:
+            errors.append(f"{prefix}: invalid support_type")
+        if not isinstance(evidence_ids, list) or not evidence_ids:
+            errors.append(f"{prefix}: evidence_ids must be a non-empty list")
+            evidence_ids = []
+        missing = [source_id for source_id in evidence_ids if source_id not in source_by_id]
+        if missing:
+            errors.append(f"{prefix}: unknown evidence_ids {missing}")
+        if importance == "decision_critical":
+            levels = {
+                str(source_by_id[source_id].get("verification_level", ""))
+                for source_id in evidence_ids
+                if source_id in source_by_id
+            }
+            if not levels.intersection({"full_text_verified", "official_text_verified"}):
+                errors.append(f"{prefix}: decision-critical claim lacks full-text or official evidence")
+            if support_type == "indirect":
+                errors.append(f"{prefix}: decision-critical claim cannot rely only on indirect support")
+            if not claim.get("conditions"):
+                errors.append(f"{prefix}: decision-critical claim lacks conditions")
+        if require_counter and importance == "decision_critical" and not counter_ids and not counter_note:
+            errors.append(f"{prefix}: decision-critical claim lacks counter-evidence or a counter-evidence note")
+        if counter_ids and not isinstance(counter_ids, list):
+            errors.append(f"{prefix}: counter_evidence_ids must be a list")
+            counter_ids = []
+        unknown_counter = [source_id for source_id in counter_ids if source_id not in source_by_id]
+        if unknown_counter:
+            errors.append(f"{prefix}: unknown counter_evidence_ids {unknown_counter}")
+        if patents_excluded and ("patent" in claim_type or "专利" in text.lower()):
+            errors.append(f"{prefix}: excluded patent material is used in a claim")
+        if claim_type in OFFICIAL_CLAIM_TYPES or re.search(r"\b(?:GB|IEC|ISO)\s*[/T-]?\s*\d", text, re.IGNORECASE):
+            levels = {
+                str(source_by_id[source_id].get("verification_level", ""))
+                for source_id in evidence_ids
+                if source_id in source_by_id
+            }
+            if "official_text_verified" not in levels:
+                errors.append(f"{prefix}: standards or regulatory claim lacks official_text_verified evidence")
+        if not str(claim.get("scope_limit", "")).strip():
+            warnings.append(f"{prefix}: scope_limit is empty")
+        if str(claim.get("confidence", "")).strip().lower() not in {"low", "medium", "high"}:
+            errors.append(f"{prefix}: confidence must be low, medium, or high")
+
+
+def _verify_report(report: Path, source_count: int, errors: list[str], warnings: list[str]) -> None:
+    if not report.is_file():
+        errors.append("REPORT.md is missing")
+        return
+    text = report.read_text(encoding="utf-8")
+    if "{{" in text:
+        errors.append("report still contains template placeholders")
+    for label, alternatives in REQUIRED_SECTION_GROUPS:
+        if not any(f"## {heading}" in text for heading in alternatives):
+            errors.append(f"missing reader section: {label}")
+    if "## 参考文献" not in text:
+        errors.append("missing reader-facing references section")
+    reader_text = text.split("## 参考文献", 1)[0]
+    leaked_ids = sorted(set(INTERNAL_ID.findall(reader_text)))
+    if leaked_ids:
+        errors.append(f"internal evidence IDs leaked into reader narrative: {leaked_ids[:5]}")
+    citation_count = len(LINK_RE.findall(text))
+    minimum_citations = min(3, source_count)
+    if source_count and citation_count < minimum_citations:
+        errors.append(
+            f"report has {source_count} sources but only {citation_count} descriptive Markdown citations; "
+            f"at least {minimum_citations} are required"
+        )
+    for paragraph in re.split(r"\n\s*\n", reader_text):
+        if STRONG_LANGUAGE.search(paragraph) and not LINK_RE.search(paragraph):
+            errors.append("unsupported exclusivity or certainty language in reader narrative")
+            break
+    audit_headings = ("## 证据附录", "## 检索日志", "## 论断与证据映射")
+    for heading in audit_headings:
+        if heading in text:
+            errors.append(f"backstage audit section appears in reader report: {heading[3:]}")
+    if len(text) < 1500:
+        warnings.append("report is unusually short for a professional technology survey")
+
+
+def _verify_review(run_dir: Path, errors: list[str]) -> str:
+    review_path = run_dir / "validation" / "report-review.json"
+    if not review_path.is_file():
+        errors.append("missing independent review: validation/report-review.json")
+        return "needs_review"
+    try:
+        review = json.loads(review_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        errors.append(f"invalid report-review.json: {exc}")
+        return "needs_review"
+    if review.get("independent") is not True:
+        errors.append("report review is not marked independent")
+    findings = review.get("findings", [])
+    if not isinstance(findings, list):
+        errors.append("review findings must be a list")
+        findings = []
+    open_major = [item for item in findings if isinstance(item, dict) and item.get("severity") in {"blocker", "major"}]
+    if review.get("status") != "pass" or open_major:
+        errors.append("independent review has unresolved blocker or major findings")
+    recommendation = str(review.get("release_recommendation", "needs_review"))
+    if recommendation not in {"ready", "ready_with_limitations"}:
+        errors.append("review does not recommend release")
+        return "needs_review"
+    return recommendation
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
     run_dir = Path(args.run).resolve()
-    report = run_dir / "REPORT.md"
-    errors = []
-    if not report.is_file():
-        errors.append("REPORT.md is missing")
+    errors: list[str] = []
+    warnings: list[str] = []
+    request = run_dir / "request.yaml"
+    if not request.is_file():
+        errors.append("missing artifact: request.yaml")
+        request_text = ""
     else:
-        text = report.read_text(encoding="utf-8")
-        for heading in REQUIRED_HEADINGS:
-            if f"## {heading}" not in text:
-                errors.append(f"missing heading: {heading}")
-        if "{{" in text:
-            errors.append("report still contains template placeholders")
-    for name in ("request.yaml", "sources.jsonl", "claims.jsonl"):
-        if not (run_dir / name).is_file():
-            errors.append(f"missing artifact: {name}")
-    result = {"checked_at": utc_now(), "status": "fail" if errors else "pass", "errors": errors}
-    (run_dir / "validation" / "structure.json").write_text(
-        json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+        request_text = request.read_text(encoding="utf-8")
+    exclusions = _yaml_list(request_text, "exclude")
+    require_counter = _yaml_bool(request_text, "require_counter_evidence", default=True)
+    sources = _read_jsonl(run_dir / "sources.jsonl", "sources", errors)
+    claims = _read_jsonl(run_dir / "claims.jsonl", "claims", errors)
+    source_by_id = _verify_sources(sources, exclusions, errors, warnings)
+    _verify_claims(claims, source_by_id, exclusions, require_counter, errors, warnings)
+
+    release_state = "needs_review"
+    if args.stage == "release":
+        _verify_report(run_dir / "REPORT.md", len(sources), errors, warnings)
+        release_state = _verify_review(run_dir, errors)
+    result = {
+        "checked_at": utc_now(),
+        "stage": args.stage,
+        "status": "fail" if errors else "pass",
+        "release_state": release_state if not errors and args.stage == "release" else "needs_review",
+        "source_count": len(sources),
+        "claim_count": len(claims),
+        "errors": errors,
+        "warnings": warnings,
+    }
+    if not args.no_write:
+        validation_dir = run_dir / "validation"
+        validation_dir.mkdir(exist_ok=True)
+        (validation_dir / "quality.json").write_text(
+            json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 1 if errors else 0
 
@@ -112,6 +393,8 @@ IMAGE_RE = re.compile(
     r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"([^\"]*)\")?\)"
 )
 LINK_RE = re.compile(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)(?:\s+\"([^\"]*)\")?\)")
+CODE_RE = re.compile(r"`([^`\n]+)`")
+RAW_URL_RE = re.compile(r"https?://[^\s<>()\[\]\"'，。！？；：、]+")
 IMAGE_MIME_TYPES = {
     ".avif": "image/avif",
     ".bmp": "image/bmp",
@@ -159,6 +442,14 @@ def _embedded_image(path: str, run_dir: Path, issues: list[str]) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
+def _format_plain_inline(text: str) -> str:
+    """Escape text and render emphasis that is outside links, images, and code."""
+    escaped = html.escape(text)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    escaped = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<em>\1</em>", escaped)
+    return escaped
+
+
 def inline_to_html(text: str, run_dir: Path, issues: list[str]) -> str:
     """Render the small Markdown inline subset needed by research reports."""
     tokens = []
@@ -167,12 +458,28 @@ def inline_to_html(text: str, run_dir: Path, issues: list[str]) -> str:
     for match in LINK_RE.finditer(text):
         if not any(start <= match.start() < end for start, end, _, _ in tokens):
             tokens.append((match.start(), match.end(), "link", match))
+    for match in CODE_RE.finditer(text):
+        if not any(start <= match.start() < end for start, end, _, _ in tokens):
+            tokens.append((match.start(), match.end(), "code", match))
+    for match in RAW_URL_RE.finditer(text):
+        if not any(start <= match.start() < end for start, end, _, _ in tokens):
+            tokens.append((match.start(), match.end(), "url", match))
     tokens.sort(key=lambda item: item[0])
 
     output = []
     cursor = 0
     for start, end, kind, match in tokens:
-        output.append(html.escape(text[cursor:start]))
+        output.append(_format_plain_inline(text[cursor:start]))
+        if kind == "code":
+            output.append(f"<code>{html.escape(match.group(1))}</code>")
+            cursor = end
+            continue
+        if kind == "url":
+            target = match.group(0)
+            escaped_target = html.escape(target, quote=True)
+            output.append(f'<a href="{escaped_target}">{html.escape(target)}</a>')
+            cursor = end
+            continue
         label, target, title = match.group(1), match.group(2), match.group(3)
         if kind == "image":
             src = _embedded_image(target, run_dir, issues)
@@ -190,10 +497,10 @@ def inline_to_html(text: str, run_dir: Path, issues: list[str]) -> str:
             title_attr = f' title="{html.escape(title)}"' if title else ""
             output.append(
                 f'<a href="{html.escape(target, quote=True)}"{title_attr}>'
-                f"{html.escape(label)}</a>"
+                f"{_format_plain_inline(label)}</a>"
             )
         cursor = end
-    output.append(html.escape(text[cursor:]))
+    output.append(_format_plain_inline(text[cursor:]))
     return "".join(output)
 
 
@@ -242,6 +549,21 @@ def markdown_to_html(markdown: str, title: str, run_dir: Path) -> tuple[str, lis
     paragraph: list[str] = []
     list_items: list[str] = []
     list_kind: str | None = None
+    heading_ids: dict[int, str] = {}
+    heading_counts: dict[str, int] = {}
+    toc_items: list[tuple[str, str]] = []
+    for line_index, line in enumerate(lines):
+        heading = re.match(r"^(#{1,6})\s+(.+)$", line.rstrip())
+        if not heading:
+            continue
+        level = len(heading.group(1))
+        heading_text = re.sub(r"[*_`]", "", heading.group(2)).strip()
+        base = slugify(heading_text)
+        heading_counts[base] = heading_counts.get(base, 0) + 1
+        heading_id = base if heading_counts[base] == 1 else f"{base}-{heading_counts[base]}"
+        heading_ids[line_index] = heading_id
+        if level == 2 and heading_text != "参考文献":
+            toc_items.append((heading_id, heading_text))
 
     def flush_paragraph() -> None:
         if paragraph:
@@ -291,7 +613,11 @@ def markdown_to_html(markdown: str, title: str, run_dir: Path) -> tuple[str, lis
             flush_paragraph()
             flush_list()
             level = len(heading.group(1))
-            rendered.append(f"<h{level}>{inline_to_html(heading.group(2), run_dir, issues)}</h{level}>")
+            heading_id = heading_ids.get(index, slugify(heading.group(2)))
+            rendered.append(
+                f'<h{level} id="{html.escape(heading_id, quote=True)}">'
+                f"{inline_to_html(heading.group(2), run_dir, issues)}</h{level}>"
+            )
             index += 1
             continue
         if raw.startswith("> "):
@@ -326,6 +652,18 @@ def markdown_to_html(markdown: str, title: str, run_dir: Path) -> tuple[str, lis
     flush_paragraph()
     flush_list()
 
+    if toc_items:
+        toc = (
+            '<nav class="toc" aria-label="目录"><div class="toc-title">目录</div><ol>'
+            + "".join(
+                f'<li><a href="#{html.escape(heading_id, quote=True)}">{html.escape(label)}</a></li>'
+                for heading_id, label in toc_items
+            )
+            + "</ol></nav>"
+        )
+        insert_at = next((position + 1 for position, item in enumerate(rendered) if item.startswith("<h1")), 0)
+        rendered.insert(insert_at, toc)
+
     body = "\n".join(rendered)
     document = (
         "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
@@ -343,6 +681,8 @@ def markdown_to_html(markdown: str, title: str, run_dir: Path) -> tuple[str, lis
         "display:inline-block}figcaption{color:#5f6368;font-size:.9em;margin-top:.35em}"
         "pre{overflow:auto;padding:1em;background:#f6f8fa;border-radius:6px}"
         "code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}"
+        ".toc{margin:1.5em 0 2.5em;padding:1em 1.25em;background:#f7f9fb;border-radius:8px}"
+        ".toc-title{font-weight:700;margin-bottom:.45em}.toc ol{margin:.2em 0;padding-left:1.5em}"
         ".missing-asset{color:#b3261e;background:#fce8e6;padding:.1em .3em}"
         "a{color:#1565c0}hr{border:0;border-top:1px solid #d7dbe0;margin:2em 0}"
         "@media print{body{margin:0;max-width:none}a{color:inherit;text-decoration:none}"
@@ -416,7 +756,12 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--out")
     init.add_argument("--force", action="store_true")
     init.set_defaults(func=cmd_init)
-    for name, func in (("verify", cmd_verify), ("render", cmd_render), ("package", cmd_package)):
+    verify = sub.add_parser("verify")
+    verify.add_argument("--run", required=True)
+    verify.add_argument("--stage", choices=("evidence", "release"), default="release")
+    verify.add_argument("--no-write", action="store_true")
+    verify.set_defaults(func=cmd_verify)
+    for name, func in (("render", cmd_render), ("package", cmd_package)):
         command = sub.add_parser(name)
         command.add_argument("--run", required=True)
         command.set_defaults(func=func)
@@ -430,4 +775,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

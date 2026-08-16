@@ -1,15 +1,14 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$skill = Join-Path $root 'skill\technology-research'
-$targets = @(
-    (Join-Path (Get-Location) '.claude\skills\technology-research'),
-    (Join-Path (Get-Location) '.opencode\skills\technology-research'),
-    (Join-Path (Get-Location) '.agents\skills\technology-research')
-)
+$skills = @('technology-research', 'technology-research-review')
+$platformRoots = @('.claude\skills', '.opencode\skills', '.agents\skills')
 
-foreach ($target in $targets) {
-    New-Item -ItemType Directory -Force -Path $target | Out-Null
-    Copy-Item -Path (Join-Path $skill '*') -Destination $target -Recurse -Force
-    Write-Host "synced: $target"
+foreach ($skillName in $skills) {
+    $skill = Join-Path $root "skill\$skillName"
+    foreach ($platformRoot in $platformRoots) {
+        $target = Join-Path (Get-Location) "$platformRoot\$skillName"
+        New-Item -ItemType Directory -Force -Path $target | Out-Null
+        Copy-Item -Path (Join-Path $skill '*') -Destination $target -Recurse -Force
+        Write-Host "synced: $target"
+    }
 }
-

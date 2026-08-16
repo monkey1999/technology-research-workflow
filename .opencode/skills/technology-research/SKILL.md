@@ -1,87 +1,78 @@
 ---
 name: technology-research
-description: >
-  Research any technology domain and produce a readable, evidence-grounded
-  technical landscape and engineering maturity report. Use when the user asks
-  for a technology survey, literature-and-industry review, technical landscape,
-  engineering assessment, roadmap, or comparable report.
-license: MIT
-compatibility: Claude Code, OpenCode, Codex, DeepSeek Harness
-metadata:
-  workflow-version: "0.1.0"
+description: Research a technology domain and produce a readable, evidence-grounded technical landscape and engineering maturity report. Use for technology surveys, literature-and-industry reviews, route comparisons, engineering assessments, and decision-oriented research reports.
 ---
 
 # Technology Research
 
-## Primary objective
+## Objective
 
-The primary deliverable is a readable professional report. Evidence ledgers,
-search logs, task states, and review records are backstage artifacts. Do not
-turn the main report into an audit checklist.
+Produce a professional report that explains the technology, not a research log
+or an audit report. Keep source ledgers, claim mappings, validation results, and
+review findings in the run directory as backstage material.
 
-## Required resources
-
-Before drafting, read:
+Before starting, read:
 
 - `references/report-schema.md`
-- `references/chinese-style-guide.md` when the report language is Chinese
+- `references/chinese-style-guide.md` for Chinese reports
 - `references/evidence-policy.md`
-
-Use the nearest `request.yaml` as the task contract. If it is missing, create
-one from `templates/request.yaml` before research begins.
+- the nearest `request.yaml`
 
 ## Workflow
 
-1. Read the request and identify the audience, time boundary, inclusions,
-   exclusions, and decisions the reader must make.
-2. Build a report-oriented question tree. Do not begin with a list of source
-   types or a generic literature-review outline.
-3. Search academic, engineering, industry, standards, and optional patent
-   sources in parallel. Use primary or authoritative sources where available.
-4. Record sources and evidence in the run directory. Every important factual
-   or numeric statement in the draft must have a source or an explicit
-   unresolved status.
-5. Synthesize mechanisms, technology routes, performance boundaries,
-   engineering conditions, negative evidence, and contradictions.
-6. Draft the report as a continuous argument: question, mechanism, evidence,
-   boundary, comparison, and judgment.
-7. Apply the professional writing guide. Remove generic AI phrasing, source-by-
-   source listing, unnecessary headings, and list compulsion without changing
-   the technical meaning.
-8. Verify citations, numbers, units, formulas, names, scope, and uncertainty.
-9. Render Markdown to HTML and PDF when the tools are available.
-10. Review the rendered report as a reader who cannot see the run logs. If the
-    reader cannot identify the key judgments and their boundaries, revise the
-    report even when the evidence checks pass.
+1. Identify the reader's decisions, scope, exclusions, time boundary, and the
+   questions the report must answer.
+2. Build a question tree around mechanisms, technical routes, demonstrated
+   results, performance boundaries, engineering conditions, alternatives, and
+   maturity. Do not organize the plan by source type.
+3. Search academic, engineering, industry, standards, and other in-scope
+   sources. Treat search results and aggregators as discovery inputs only.
+4. Record source evidence and important claims in `sources.jsonl` and
+   `claims.jsonl`. Run `researchctl verify --stage evidence` before drafting.
+5. Create a short synthesis brief that states the argument spine: what problem
+   matters, how each route works, what experiments establish, where evidence
+   stops, and what this means for engineering decisions.
+6. Draft `REPORT.md` from the synthesis brief. Write connected explanation in
+   the order mechanism → evidence → boundary → comparison → judgment. Do not
+   write source-by-source summaries.
+7. Add only evidence-bearing visuals: a mechanism or route map, a comparison
+   table, a result plot reconstructed from verified data, or a maturity
+   roadmap. Do not add decorative images or search statistics.
+8. Cite important facts near the relevant sentence with normal Markdown links.
+   Keep internal source and claim IDs out of the reader-facing narrative.
+9. Delegate a fresh-context review to `technology-research-review`. If
+   delegation is unavailable, perform a separate review pass that reads the
+   artifacts without relying on drafting notes. Save review output under
+   `validation/` and revise all blocker or major findings.
+10. Run `researchctl verify --stage release`, then render and package. Do not
+    declare completion when the release check fails.
 
-## Report-first rules
+## Report rules
 
-- Lead with the conclusion or technical judgment when the evidence allows it.
-- Explain why an indicator matters before comparing values.
-- Group sources into mechanisms and technology routes; do not summarize papers
-  one by one.
-- Distinguish demonstrated capability, inferred capability, proposed capability,
-  and unverified marketing claims.
-- State conditions and boundaries next to the conclusion they qualify.
-- Use tables only when they make a comparison easier to read.
-- Keep internal evidence IDs out of the main narrative; place the full mapping
-  in the evidence appendix.
+- Lead with the technical judgment when evidence supports one.
+- Explain why a metric matters before comparing values.
+- Put limitations beside the conclusion they qualify; do not create a giant
+  audit-style limitations dump.
+- Distinguish demonstrated, inferred, proposed, and marketed capabilities in
+  prose without exposing internal workflow labels.
+- Use tables only for real comparison and figures only when they clarify a
+  mechanism, quantitative result, route relationship, or timeline.
+- Write the main report for a reader who never sees the run directory.
 
-## Protected content during prose editing
+## Protected content
 
-Do not alter numbers, units, formulas, citations, proper nouns, technical terms,
-experimental conditions, negative findings, uncertainty, or applicability
-boundaries merely to make the prose sound more natural.
+Editing for readability must not change numbers, units, formulas, citations,
+proper nouns, experimental conditions, negative findings, uncertainty, or
+applicability boundaries.
 
-## Completion states
+## Completion
 
-- `ready`: required questions answered and key evidence verified.
-- `ready_with_limitations`: useful report delivered with explicit gaps and
-  recovery conditions.
-- `needs_review`: a material scientific or scope judgment remains unresolved.
+The agent does not choose the final state. `researchctl verify --stage release`
+derives it from the evidence gate and independent review:
+
+- `ready`: decision-critical evidence and report quality pass.
+- `ready_with_limitations`: the report is useful and remaining gaps do not
+  invalidate its main judgments; recovery conditions are explicit backstage.
+- `needs_review`: a material technical, source, scope, or writing issue remains.
 - `blocked`: required access or evidence is unavailable.
-
-Do not claim full completion when the report is only a source inventory or an
-unverified draft.
-
 

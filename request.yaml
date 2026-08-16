@@ -1,7 +1,12 @@
-topic: ""
+topic: "光纤传感技术在电芯监测中的应用"
 audience: "技术研发、产品和产业决策人员"
 language: "zh-CN"
-as_of: ""
+as_of: "2026-08-16"
+
+decisions:
+  - "判断该技术是否具有可复现实验基础和明确工程价值"
+  - "比较主要技术路线并识别各自适用场景、边界和成熟度"
+  - "为后续样机验证、合作或产品立项给出证据约束下的建议"
 
 scope:
   include:
@@ -20,11 +25,12 @@ report:
     - pdf
   primary_output: "REPORT.md"
   style: "professional-readable"
+  narrative: "mechanism-evidence-boundary-comparison-judgment"
+  visuals: "evidence-bearing-only"
 
 quality:
   require_primary_sources: true
   require_counter_evidence: true
   require_negative_evidence: true
+  require_independent_review: true
   allow_ready_with_limitations: true
-
-

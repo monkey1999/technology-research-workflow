@@ -1,6 +1,7 @@
 # OpenCode adapter
 
-Copy `skill/technology-research/` to `.opencode/skills/technology-research/` or run:
+Run the installer to expose both the main research skill and the independent
+review skill:
 
 ```powershell
 .\install.ps1 -Scope Project
@@ -12,4 +13,5 @@ Invoke with:
 /technology-research
 ```
 
-
+After the draft exists, run `technology-research-review` in a fresh review
+context before the release gate.

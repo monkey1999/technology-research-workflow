@@ -1,38 +1,42 @@
 # Chinese professional report style
 
-## Aim
+## Voice
 
-Write for technical readers who need to understand the technology and make a
-decision. The report should read like a careful engineer or researcher wrote it,
-not like a search-result digest.
+Write like an engineer or researcher explaining a field to another professional.
+Prefer connected paragraphs, concrete verbs, conditions, quantities, and causal
+links. The reader should understand both the judgment and why it follows.
 
-## Prefer
+## Narrative rules
 
-- 先给判断，再解释依据。
-- 用机制连接实验结果与工程结论。
-- 用具体动词、条件、数量和范围替代空泛形容词。
-- 保留矛盾、失败、负面结果和不确定性。
-- 让标题说明本节内容，不用悬念式或宣传式标题。
-- 用连续段落表达因果和取舍；只在比较确实更清楚时使用列表或表格。
+- Open sections with the question or judgment, then explain mechanism and
+  evidence.
+- Group studies by the technical point they establish; never summarize one
+  source after another.
+- Explain disagreements through differences in material, device, protocol,
+  scale, metric, or deployment condition.
+- Put uncertainty beside the affected conclusion.
+- Use lists for genuinely enumerable items and tables for repeated comparisons;
+  otherwise use prose.
+- Use normal citations such as `[Novais et al., 2016](https://...)` near the
+  supported statement. Keep workflow IDs backstage.
 
-## Avoid
+## Remove during editing
 
-- “本文将全面介绍……”
-- “随着……不断发展……”
-- “具有重要意义”“前景广阔”而没有具体依据。
-- “不是……而是……”的机械反差句。
-- 连续的“首先、其次、此外、最后”。
-- 把多个来源逐条拼接成一段。
-- 每节都重复摘要或用“综上所述”收尾。
-- “研究表明”但没有说明哪项研究、什么条件、得出什么范围的结果。
-- 把实验室演示、企业宣传和规模化部署写成同一层级的证据。
+- empty openings such as “随着……不断发展” and “本文将全面介绍”；
+- unsupported praise such as “意义重大”“前景广阔”；
+- repetitive “首先、其次、此外、最后”；
+- mechanical contrast patterns repeated across paragraphs；
+- paragraph-length lists disguised as prose；
+- source inventories, company inventories, and repeated section conclusions；
+- “研究表明” without naming the condition, result, and source；
+- claims that turn “未检索到” into “不存在”。
 
-## Editing passes
+## Final prose pass
 
-1. 删除空话和重复背景。
-2. 把每段的中心判断放到读者能看到的位置。
-3. 把名词化表达改成具体动词。
-4. 检查段落之间是否存在真正的逻辑推进。
-5. 检查润色是否改变了数字、引用、条件或不确定性。
-
+1. Read only the report, without plans or ledgers.
+2. Mark the central judgment of every section.
+3. Remove any paragraph that does not advance mechanism, evidence, boundary,
+   comparison, or decision.
+4. Merge repeated qualifications into the sentence they constrain.
+5. Confirm that editing preserved technical meaning and citations.
 

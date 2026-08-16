@@ -5,30 +5,32 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$skill = Join-Path $root 'skill\technology-research'
+$skills = @('technology-research', 'technology-research-review')
 
 if ($Scope -eq 'Global') {
-    $targets = @(
-        (Join-Path $env:USERPROFILE '.claude\skills\technology-research'),
-        (Join-Path $env:USERPROFILE '.config\opencode\skills\technology-research'),
-        (Join-Path $env:USERPROFILE '.agents\skills\technology-research')
+    $platformRoots = @(
+        (Join-Path $env:USERPROFILE '.claude\skills'),
+        (Join-Path $env:USERPROFILE '.config\opencode\skills'),
+        (Join-Path $env:USERPROFILE '.agents\skills')
     )
 } else {
-    $targets = @(
-        (Join-Path (Get-Location) '.claude\skills\technology-research'),
-        (Join-Path (Get-Location) '.opencode\skills\technology-research'),
-        (Join-Path (Get-Location) '.agents\skills\technology-research')
+    $platformRoots = @(
+        (Join-Path (Get-Location) '.claude\skills'),
+        (Join-Path (Get-Location) '.opencode\skills'),
+        (Join-Path (Get-Location) '.agents\skills')
     )
 }
 
-foreach ($target in $targets) {
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
-    if (Test-Path -LiteralPath $target) {
-        Write-Host "exists, skipped: $target"
-        continue
+foreach ($skillName in $skills) {
+    $skill = Join-Path $root "skill\$skillName"
+    foreach ($platformRoot in $platformRoots) {
+        $target = Join-Path $platformRoot $skillName
+        New-Item -ItemType Directory -Force -Path $platformRoot | Out-Null
+        if (Test-Path -LiteralPath $target) {
+            Write-Host "exists, skipped: $target"
+            continue
+        }
+        Copy-Item -LiteralPath $skill -Destination $target -Recurse
+        Write-Host "installed: $target"
     }
-    Copy-Item -LiteralPath $skill -Destination $target -Recurse
-    Write-Host "installed: $target"
 }
-
-

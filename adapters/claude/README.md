@@ -1,6 +1,7 @@
 # Claude Code adapter
 
-Copy `skill/technology-research/` to `.claude/skills/technology-research/` or run:
+Run the installer to expose both the main research skill and the independent
+review skill:
 
 ```powershell
 .\install.ps1 -Scope Project
@@ -12,4 +13,5 @@ Invoke with:
 /technology-research
 ```
 
-
+After the draft exists, start a fresh review context or delegate a reviewer and
+invoke `/technology-research-review` before the release gate.
