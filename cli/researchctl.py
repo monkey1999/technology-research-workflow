@@ -4,14 +4,19 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
+import html
 import json
+import mimetypes
 import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,31 +108,234 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
-def markdown_to_html(markdown: str, title: str) -> str:
-    lines = []
-    for raw in markdown.splitlines():
-        line = raw.rstrip()
-        if line.startswith("# "):
-            lines.append(f"<h1>{line[2:]}</h1>")
-        elif line.startswith("## "):
-            lines.append(f"<h2>{line[3:]}</h2>")
-        elif line.startswith("### "):
-            lines.append(f"<h3>{line[4:]}</h3>")
-        elif line.startswith("> "):
-            lines.append(f"<blockquote>{line[2:]}</blockquote>")
-        elif not line:
-            lines.append("")
+IMAGE_RE = re.compile(
+    r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"([^\"]*)\")?\)"
+)
+LINK_RE = re.compile(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)(?:\s+\"([^\"]*)\")?\)")
+
+
+def _safe_path(path: str, run_dir: Path) -> Path | None:
+    """Resolve a local asset without allowing it to escape the run directory."""
+    parsed = urlsplit(path)
+    if parsed.scheme or parsed.netloc:
+        return None
+    candidate = (run_dir / unquote(parsed.path)).resolve()
+    try:
+        candidate.relative_to(run_dir.resolve())
+    except ValueError:
+        return None
+    return candidate
+
+
+def _embedded_image(path: str, run_dir: Path, issues: list[str]) -> str:
+    """Return a data URI for a local image, or a safe fallback for external assets."""
+    if path.startswith("data:"):
+        return path
+    parsed = urlsplit(path)
+    if parsed.scheme in {"http", "https"} or parsed.netloc:
+        issues.append(f"external image is not self-contained: {path}")
+        return path
+
+    asset = _safe_path(path, run_dir)
+    if asset is None or not asset.is_file():
+        issues.append(f"missing or unsafe image asset: {path}")
+        return ""
+    mime = mimetypes.guess_type(asset.name)[0] or "application/octet-stream"
+    encoded = base64.b64encode(asset.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
+
+
+def inline_to_html(text: str, run_dir: Path, issues: list[str]) -> str:
+    """Render the small Markdown inline subset needed by research reports."""
+    tokens = []
+    for match in IMAGE_RE.finditer(text):
+        tokens.append((match.start(), match.end(), "image", match))
+    for match in LINK_RE.finditer(text):
+        if not any(start <= match.start() < end for start, end, _, _ in tokens):
+            tokens.append((match.start(), match.end(), "link", match))
+    tokens.sort(key=lambda item: item[0])
+
+    output = []
+    cursor = 0
+    for start, end, kind, match in tokens:
+        output.append(html.escape(text[cursor:start]))
+        label, target, title = match.group(1), match.group(2), match.group(3)
+        if kind == "image":
+            src = _embedded_image(target, run_dir, issues)
+            if src:
+                caption = html.escape(label) if label else ""
+                title_attr = f' title="{html.escape(title)}"' if title else ""
+                output.append(
+                    f'<figure><img src="{html.escape(src, quote=True)}" '
+                    f'alt="{caption}"{title_attr}>'
+                    f"{f'<figcaption>{caption}</figcaption>' if caption else ''}</figure>"
+                )
+            else:
+                output.append(f'<span class="missing-asset">[缺少图片：{html.escape(label)}]</span>')
         else:
-            lines.append(f"<p>{line}</p>")
-    body = "\n".join(lines)
-    return (
+            title_attr = f' title="{html.escape(title)}"' if title else ""
+            output.append(
+                f'<a href="{html.escape(target, quote=True)}"{title_attr}>'
+                f"{html.escape(label)}</a>"
+            )
+        cursor = end
+    output.append(html.escape(text[cursor:]))
+    return "".join(output)
+
+
+def _table_cells(line: str) -> list[str]:
+    line = line.strip()
+    if line.startswith("|"):
+        line = line[1:]
+    if line.endswith("|") and not line.endswith("\\|"):
+        line = line[:-1]
+    return [cell.strip().replace("\\|", "|") for cell in line.split("|")]
+
+
+def _is_table_separator(line: str) -> bool:
+    cells = _table_cells(line)
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells)
+
+
+def _render_table(header: str, separator: str, rows: list[str], run_dir: Path, issues: list[str]) -> str:
+    header_cells = _table_cells(header)
+    body_rows = [_table_cells(row) for row in rows]
+    aligns = []
+    for cell in _table_cells(separator):
+        aligns.append("center" if cell.startswith(":") and cell.endswith(":") else "left" if cell.startswith(":") or not cell.endswith(":") else "right")
+
+    def render_cell(cell: str, index: int) -> str:
+        align = aligns[index] if index < len(aligns) else "left"
+        return f'<td style="text-align:{align}">{inline_to_html(cell, run_dir, issues)}</td>'
+
+    head = "".join(
+        f'<th style="text-align:{aligns[index] if index < len(aligns) else "left"}">{inline_to_html(cell, run_dir, issues)}</th>'
+        for index, cell in enumerate(header_cells)
+    )
+    body = "".join(
+        "<tr>" + "".join(render_cell(cell, index) for index, cell in enumerate(row)) + "</tr>"
+        for row in body_rows
+    )
+    return f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
+
+
+def markdown_to_html(markdown: str, title: str, run_dir: Path) -> tuple[str, list[str]]:
+    """Render report Markdown into a self-contained, offline-readable HTML file."""
+    lines = markdown.splitlines()
+    rendered = []
+    issues: list[str] = []
+    index = 0
+    paragraph: list[str] = []
+    list_items: list[str] = []
+    list_kind: str | None = None
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            text = " ".join(paragraph)
+            if len(paragraph) == 1 and IMAGE_RE.fullmatch(text.strip()):
+                rendered.append(inline_to_html(text, run_dir, issues))
+            else:
+                rendered.append(f'<p>{inline_to_html(text, run_dir, issues)}</p>')
+            paragraph.clear()
+
+    def flush_list() -> None:
+        nonlocal list_kind
+        if list_items:
+            tag = list_kind or "ul"
+            rendered.append(f"<{tag}>" + "".join(f"<li>{item}</li>" for item in list_items) + f"</{tag}>")
+            list_items.clear()
+        list_kind = None
+
+    while index < len(lines):
+        raw = lines[index].rstrip()
+        if raw.startswith("```"):
+            flush_paragraph()
+            flush_list()
+            language = html.escape(raw[3:].strip())
+            index += 1
+            code_lines = []
+            while index < len(lines) and not lines[index].startswith("```"):
+                code_lines.append(lines[index])
+                index += 1
+            if index < len(lines):
+                index += 1
+            class_attr = f' class="language-{language}"' if language else ""
+            rendered.append(f"<pre><code{class_attr}>{html.escape(chr(10).join(code_lines))}</code></pre>")
+            continue
+        if index + 1 < len(lines) and "|" in raw and _is_table_separator(lines[index + 1]):
+            flush_paragraph()
+            flush_list()
+            table_rows = []
+            index += 2
+            while index < len(lines) and lines[index].strip() and "|" in lines[index]:
+                table_rows.append(lines[index].rstrip())
+                index += 1
+            rendered.append(_render_table(raw, lines[index - len(table_rows) - 1], table_rows, run_dir, issues))
+            continue
+        heading = re.match(r"^(#{1,6})\s+(.+)$", raw)
+        if heading:
+            flush_paragraph()
+            flush_list()
+            level = len(heading.group(1))
+            rendered.append(f"<h{level}>{inline_to_html(heading.group(2), run_dir, issues)}</h{level}>")
+            index += 1
+            continue
+        if raw.startswith("> "):
+            flush_paragraph()
+            flush_list()
+            rendered.append(f"<blockquote>{inline_to_html(raw[2:], run_dir, issues)}</blockquote>")
+            index += 1
+            continue
+        list_match = re.match(r"^\s*([-*+] |\d+\. )(.+)$", raw)
+        if list_match:
+            flush_paragraph()
+            kind = "ol" if list_match.group(1)[0].isdigit() else "ul"
+            if list_kind and list_kind != kind:
+                flush_list()
+            list_kind = kind
+            list_items.append(inline_to_html(list_match.group(2), run_dir, issues))
+            index += 1
+            continue
+        if not raw.strip():
+            flush_paragraph()
+            flush_list()
+            index += 1
+            continue
+        if re.fullmatch(r"\s*([-*_])(?:\s*\1){2,}\s*", raw):
+            flush_paragraph()
+            flush_list()
+            rendered.append("<hr>")
+            index += 1
+            continue
+        paragraph.append(raw.strip())
+        index += 1
+    flush_paragraph()
+    flush_list()
+
+    body = "\n".join(rendered)
+    document = (
         "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
-        f"<title>{title}</title><style>body{{max-width:900px;margin:40px auto;"
-        "padding:0 24px;font-family:system-ui,'Microsoft YaHei',sans-serif;"
-        "line-height:1.8;color:#202124}h1,h2,h3{line-height:1.3}"
-        "blockquote{border-left:4px solid #bbb;padding-left:1em;color:#555}"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        f"<title>{html.escape(title)}</title><style>"
+        "*{box-sizing:border-box}body{max-width:1000px;margin:40px auto;padding:0 24px;"
+        "font-family:system-ui,'Microsoft YaHei',sans-serif;line-height:1.8;color:#202124;"
+        "background:#fff}h1,h2,h3,h4,h5,h6{line-height:1.3;margin-top:1.6em}"
+        "p{margin:0 0 1em}blockquote{border-left:4px solid #bbb;padding-left:1em;color:#555;"
+        "margin-left:0}ul,ol{padding-left:2em}.table-wrap{overflow-x:auto;margin:1.2em 0}"
+        "table{border-collapse:collapse;width:100%;min-width:560px;font-size:.95em}"
+        "th,td{border:1px solid #d7dbe0;padding:.55em .7em;vertical-align:top}"
+        "th{background:#f3f5f7;font-weight:650}tr:nth-child(even){background:#fafbfc}"
+        "figure{margin:1.2em 0;text-align:center}figure img{max-width:100%;height:auto;"
+        "display:inline-block}figcaption{color:#5f6368;font-size:.9em;margin-top:.35em}"
+        "pre{overflow:auto;padding:1em;background:#f6f8fa;border-radius:6px}"
+        "code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}"
+        ".missing-asset{color:#b3261e;background:#fce8e6;padding:.1em .3em}"
+        "a{color:#1565c0}hr{border:0;border-top:1px solid #d7dbe0;margin:2em 0}"
+        "@media print{body{margin:0;max-width:none}a{color:inherit;text-decoration:none}"
+        ".table-wrap{overflow:visible}table{min-width:0;font-size:9pt}}"
         f"</style></head><body>{body}</body></html>"
     )
+    return document, issues
 
 
 def cmd_render(args: argparse.Namespace) -> int:
@@ -140,7 +348,10 @@ def cmd_render(args: argparse.Namespace) -> int:
         (line[2:].strip() for line in text.splitlines() if line.startswith("# ")),
         "Technology Research Report",
     )
-    (run_dir / "REPORT.html").write_text(markdown_to_html(text, title), encoding="utf-8")
+    document, issues = markdown_to_html(text, title, run_dir)
+    (run_dir / "REPORT.html").write_text(document, encoding="utf-8")
+    for issue in issues:
+        print(f"asset: {issue}")
     pandoc = shutil.which("pandoc")
     if pandoc:
         result = subprocess.run([pandoc, str(report), "-o", str(run_dir / "REPORT.pdf")], check=False)
@@ -151,14 +362,15 @@ def cmd_render(args: argparse.Namespace) -> int:
     else:
         print("pdf: skipped (pandoc not found)")
     print(f"html: {run_dir / 'REPORT.html'}")
-    return 0
+    return 1 if issues else 0
 
 
 def cmd_package(args: argparse.Namespace) -> int:
     run_dir = Path(args.run).resolve()
+    archive = run_dir / "REPORT-package.zip"
     files = []
     for path in sorted(run_dir.rglob("*")):
-        if path.is_file() and path.name != "package-manifest.json":
+        if path.is_file() and path.name not in {"package-manifest.json", archive.name}:
             files.append(
                 {
                     "path": str(path.relative_to(run_dir)),
@@ -171,6 +383,12 @@ def cmd_package(args: argparse.Namespace) -> int:
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     print(run_dir / "package-manifest.json")
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        for item in files:
+            source = run_dir / item["path"]
+            bundle.write(source, item["path"])
+        bundle.write(run_dir / "package-manifest.json", "package-manifest.json")
+    print(f"archive: {archive}")
     return 0
 
 
