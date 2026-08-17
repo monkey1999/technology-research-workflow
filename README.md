@@ -5,6 +5,8 @@
 ## 交付模型
 
 - `REPORT.md`：主交付物。正文围绕机制、路线、实验结果、边界、工程化和选择建议连续论证。
+- `EXECUTIVE_BRIEF.md`：技术负责人快速入口，只保留核心判断、路线选择和改变判断的证据。
+- `EVIDENCE_ATLAS.md`：逐实验条件、完整矩阵、反证、冲突和证据追溯；不挤占主报告。
 - `REPORT.html`：单文件离线版，内嵌样式和本地图像，带目录、表格及可点击引用。
 - `REPORT.pdf`：环境存在 Pandoc 及可用 PDF 引擎时生成。
 - `sources.jsonl`、`claims.jsonl`、`validation/`：后台证据和质量账本，不进入读者正文。
@@ -34,16 +36,18 @@ Windows `py` launcher。
 ./researchctl.ps1 verify --run runs/demo-topic --stage evidence
 ```
 
-正文和证据图表完成后先渲染；独立上下文必须审阅最终 Markdown 和实际 HTML，并把两者哈希写入 `validation/report-review.json`。最后执行发布门禁和交付构建：
+正文和证据图表完成后先渲染；两个不同的独立上下文分别完成技术审阅和读者编辑审阅，并把最终 Markdown 与 HTML 哈希写入 `validation/report-review.json`。最后执行发布门禁和交付构建：
 
 ```powershell
 ./researchctl.ps1 render --run runs/demo-topic
-## 独立审阅并修订后，如有修改必须重新 render 和 review
+## 技术审阅与读者审阅并修订后，如有修改必须重新 render 和 review
 ./researchctl.ps1 verify --run runs/demo-topic --stage release
 ./researchctl.ps1 package --run runs/demo-topic
 ```
 
-`quality_profile: doctoral` 默认要求至少 18,000 个正文非空白字符、20 个正文内证据链接、3 张证据图、3 张分析表、8 条实验矩阵记录、6 个作图数据点、15 篇全文学术来源和 10 篇全文原始研究。它们是防止低质量报告混过门槛的下限，不是“博士级”的充分证明。通过后状态仍是 `candidate_for_human_acceptance`，必须由人作最终接受判断。
+`quality_profile: doctoral` 设置证据深度与报告适配度门禁。默认模板要求至少 20 个正文内证据链接、5 张图和 5 张分析表，并限制标题碎片化和审计/裁决元叙事。正文字符数和论文原图占比只作为诊断指标，不决定报告是否合格：篇幅由研究范围、问题数量和有效证据决定；原图、数据重构图与综合图根据直接证据价值、可读性、溯源和版权条件选择。通过数量门不等于通过主报告适配度。
+
+v0.4 要求两个不同的新上下文分别完成技术审阅和读者编辑审阅。后者专门检查报告类型、连续阅读、重复结论、信息过载和图表信息增益。通过后状态仍是 `candidate_for_human_acceptance`，必须由人作最终接受判断。
 
 ## DeepSeek Harness
 

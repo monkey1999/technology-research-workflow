@@ -1,0 +1,76 @@
+{
+  "skill_name": "technology-research",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A generated report has many bibliography links but no figures, tables, or citations in the body. Determine whether it satisfies the doctoral report floor.",
+      "expected_output": "Reject the text wall and report body-only metrics showing that bibliography links do not count.",
+      "files": ["evals/files/text-wall.md"],
+      "assertions": [
+        "The report is rejected as a text wall.",
+        "Bibliography links are not counted as body citations."
+      ],
+      "script_checks": [
+        {
+          "description": "reject bibliography-only text wall",
+          "cmd": ["scripts/report_quality.py", "--report", "evals/files/text-wall.md", "--min-body-characters", "100", "--min-body-citations", "1", "--min-figures", "1", "--min-tables", "1", "--json"],
+          "expect_exit": 1,
+          "assert": [
+            {"path": "ok", "op": "eq", "value": false},
+            {"path": "length_diagnostics.release_gate", "op": "eq", "value": false},
+            {"path": "metrics.body_citations", "op": "eq", "value": 0},
+            {"path": "metrics.figures", "op": "eq", "value": 0},
+            {"path": "metrics.tables", "op": "eq", "value": 0}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Check that a research report fixture integrates three body citations, three figures, and three analytical tables.",
+      "expected_output": "Accept the fixture at the configured deterministic floor and return exact body metrics.",
+      "files": ["evals/files/evidence-rich.md"],
+      "assertions": [
+        "The fixture passes the configured report-quality floor.",
+        "The metrics show exactly three figures and three tables."
+      ],
+      "script_checks": [
+        {
+          "description": "accept evidence-rich report structure",
+          "cmd": ["scripts/report_quality.py", "--report", "evals/files/evidence-rich.md", "--min-body-characters", "100", "--min-body-citations", "3", "--min-figures", "3", "--min-tables", "3", "--json"],
+          "expect_exit": 0,
+          "assert": [
+            {"path": "ok", "op": "eq", "value": true},
+            {"path": "length_diagnostics.release_gate", "op": "eq", "value": false},
+            {"path": "metrics.body_citations", "op": "eq", "value": 3},
+            {"path": "metrics.figures", "op": "eq", "value": 3},
+            {"path": "metrics.tables", "op": "eq", "value": 3}
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "A report exceeds the quantity floors but explains evidence gates and adjudication in the reader body. Determine whether it is a valid primary technical survey.",
+      "expected_output": "Reject it for primary-report misfit even though body citations, figures, tables, and length pass.",
+      "files": ["evals/files/audit-heavy.md"],
+      "assertions": [
+        "The report is rejected for audit or adjudication meta-narrative in the reader body.",
+        "Passing quantity floors does not override reader-fit failure."
+      ],
+      "script_checks": [
+        {
+          "description": "reject evidence-rich audit-style primary report",
+          "cmd": ["scripts/report_quality.py", "--report", "evals/files/audit-heavy.md", "--min-body-characters", "100", "--min-body-citations", "1", "--min-figures", "1", "--min-tables", "1", "--max-process-headings", "0", "--max-process-meta-mentions", "0", "--json"],
+          "expect_exit": 1,
+          "assert": [
+            {"path": "ok", "op": "eq", "value": false},
+            {"path": "length_diagnostics.release_gate", "op": "eq", "value": false},
+            {"path": "metrics.process_headings", "op": "gte", "value": 1},
+            {"path": "metrics.process_meta_mentions", "op": "gte", "value": 1}
+          ]
+        }
+      ]
+    }
+  ]
+}

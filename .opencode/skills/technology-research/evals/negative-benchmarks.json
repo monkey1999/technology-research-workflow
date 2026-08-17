@@ -1,0 +1,29 @@
+{
+  "benchmarks": [
+    {
+      "id": "r5-6-overloaded-technical-assessment",
+      "artifact": "external user-supplied calibration report; not redistributed",
+      "observed_metrics": {
+        "body_characters": 72068,
+        "body_citations": 259,
+        "figures": 35,
+        "tables": 31,
+        "unique_visuals": 35,
+        "synthesis_visuals": 21,
+        "source_figures": 13,
+        "data_reconstruction_visuals": 1
+      },
+      "quantity_floor_expected": "pass",
+      "body_length_release_gate": false,
+      "source_figure_ratio_release_gate": false,
+      "primary_report_fit_expected": "fail",
+      "failure_reasons": [
+        "technology-assessment and adjudication logic dominates the primary survey",
+        "audit and evidence-derivation sections interrupt the technical narrative",
+        "several visuals do not add enough technical interpretation even though source figures themselves are valid direct evidence",
+        "main-report detail should be split between the survey and evidence atlas"
+      ],
+      "portable_proxy_fixture": "files/audit-heavy.md"
+    }
+  ]
+}

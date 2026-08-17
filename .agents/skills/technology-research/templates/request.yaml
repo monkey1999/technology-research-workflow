@@ -1,39 +1,24 @@
 workflow_version: "0.4"
-topic: "光纤布拉格光栅（Fiber Bragg Grating，FBG）在电芯监测中的应用"
+topic: ""
 audience: "技术研发、产品和产业决策人员"
 language: "zh-CN"
-as_of: "2026-08-16"
+as_of: ""
 
 decisions:
-  - "判断FBG监测电芯温度、应变、膨胀和内部压力的实验依据是否可复现"
-  - "比较表面粘贴、结构集成和电芯内部嵌入等部署路线的性能、风险与适用边界"
-  - "评估温度—应变交叉敏感、封装、解调、标定、长期漂移和安全性问题"
-  - "判断FBG相对于热电偶、电阻温度传感器、压力传感器及其他光纤方案的实际价值"
-  - "为样机验证、合作开发或产品立项提出证据约束下的下一步建议"
+  - "读者需要据此做出的主要技术或工程决定"
 
 scope:
-  include:
-    - academic
-    - engineering
-    - industry
-    - standards
-    - maturity
-  exclude:
-    - patents
+  include: [academic, engineering, industry, standards, maturity]
+  exclude: [patents]
 
 report:
   report_type: "technical-survey"
-  formats:
-    - markdown
-    - html
-    - pdf
+  formats: [markdown, html, pdf]
   primary_output: "REPORT.md"
-  companion_outputs:
-    - "EXECUTIVE_BRIEF.md"
-    - "EVIDENCE_ATLAS.md"
+  companion_outputs: [EXECUTIVE_BRIEF.md, EVIDENCE_ATLAS.md]
   style: "professional-readable"
-  narrative: "mechanism-evidence-boundary-comparison-judgment"
-  visuals: "evidence-bearing-only"
+  narrative: "mechanism-evidence-boundary-judgment"
+  visuals: "evidence-driven"
   quality_profile: "doctoral"
 
 quality:

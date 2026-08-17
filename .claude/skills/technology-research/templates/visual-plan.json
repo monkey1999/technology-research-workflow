@@ -1,0 +1,41 @@
+{
+  "items": [
+    {
+      "figure_id": "FIG-01",
+      "role": "mechanism",
+      "kind": "schematic",
+      "presentation": "synthesis",
+      "destination": "main",
+      "reader_question": "被测过程经过哪些物理环节转化为可观测信号？",
+      "intended_insight": "说明因果链、交叉敏感和系统边界，而不是展示研究流程。",
+      "purpose": "Explain the causal chain, observables, cross-sensitivities, and system boundary.",
+      "status": "planned",
+      "source_ids": []
+    },
+    {
+      "figure_id": "FIG-02",
+      "role": "quantitative_comparison",
+      "kind": "chart",
+      "presentation": "data_reconstruction",
+      "destination": "main",
+      "reader_question": "在统一对象、单位和条件后，代表性实验的量化结果如何比较？",
+      "intended_insight": "让读者直接看到差异及其可比边界，不贴入难以解码的论文截图。",
+      "purpose": "Compare verified quantitative results only after normalizing conditions and units.",
+      "status": "planned",
+      "source_ids": [],
+      "data_file": "data-points.csv"
+    },
+    {
+      "figure_id": "FIG-03",
+      "role": "route_or_maturity",
+      "kind": "route-map",
+      "presentation": "synthesis",
+      "destination": "main",
+      "reader_question": "各技术路线的真实测量量、已展示能力和工程边界有何不同？",
+      "intended_insight": "按技术差异组织路线，不画投资门、审查门或工作流。",
+      "purpose": "Show route differences, engineering constraints, evidence maturity, and decision boundaries.",
+      "status": "planned",
+      "source_ids": []
+    }
+  ]
+}
